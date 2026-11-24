@@ -1,100 +1,159 @@
 
-import { useState } from "react";
-import { Download, FileText, TrendingUp, Package, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  getOrders,
+  getProduction,
+  getInventory,
+  getEmployees
+} from "../services/api";
 
 function Reports() {
-  const [period, setPeriod] = useState("This Month");
+  const [report, setReport] = useState({
+    orders: [],
+    production: [],
+    inventory: [],
+    employees: []
+  });
 
-  const reports = [
-    {
-      title: "Order Summary",
-      description: "Overview of total and completed orders",
-      value: "128",
-      icon: FileText
-    },
-    {
-      title: "Production Report",
-      description: "Production tasks and completion status",
-      value: "86%",
-      icon: TrendingUp
-    },
-    {
-      title: "Inventory Report",
-      description: "Available stock and low-stock items",
-      value: "245",
-      icon: Package
-    },
-    {
-      title: "Employee Report",
-      description: "Total employees in the factory",
-      value: "32",
-      icon: Users
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function loadReports() {
+      try {
+        const [orders, production, inventory, employees] =
+          await Promise.all([
+            getOrders(),
+            getProduction(),
+            getInventory(),
+            getEmployees()
+          ]);
+
+        setReport({
+          orders,
+          production,
+          inventory,
+          employees
+        });
+      } catch (err) {
+        setError("Unable to load report data. Check the server connection.");
+      } finally {
+        setLoading(false);
+      }
     }
-  ];
 
-  const downloadReport = (title) => {
-    const content = [
-      "FactoryFlow - " + title,
-      "Report Period: " + period,
-      "Generated Date: " + new Date().toLocaleDateString(),
-      "",
-      "This is a sample report. Live database data will be connected later."
-    ].join("\n");
+    loadReports();
+  }, []);
 
-    const file = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(file);
+  const completedOrders = report.orders.filter(
+    (order) => order.status === "Completed"
+  ).length;
+
+  const pendingOrders = report.orders.filter(
+    (order) => order.status === "Pending"
+  ).length;
+
+  const completedTasks = report.production.filter(
+    (task) => task.status === "Completed"
+  ).length;
+
+  const totalStock = report.inventory.reduce(
+    (total, item) => total + Number(item.quantity || 0),
+    0
+  );
+
+  function downloadReport() {
+    const content = `
+FACTORYFLOW - FACTORY REPORT
+
+Total Orders: ${report.orders.length}
+Completed Orders: ${completedOrders}
+Pending Orders: ${pendingOrders}
+
+Total Production Tasks: ${report.production.length}
+Completed Production Tasks: ${completedTasks}
+
+Total Inventory Items: ${report.inventory.length}
+Total Stock Quantity: ${totalStock}
+
+Total Employees: ${report.employees.length}
+`;
+
+    const blob = new Blob([content], {
+      type: "text/plain"
+    });
+
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = title.replaceAll(" ", "_") + ".txt";
+    link.download = "FactoryFlow-Report.txt";
     link.click();
 
     URL.revokeObjectURL(url);
-  };
+  }
+
+  if (loading) {
+    return <div className="page"><p>Loading reports...</p></div>;
+  }
+
+  if (error) {
+    return <div className="page"><p>{error}</p></div>;
+  }
 
   return (
-    <div className="page-container">
+    <div className="page">
       <div className="page-header">
         <div>
           <h1>Reports</h1>
-          <p>View and download factory performance reports.</p>
+          <p>Factory performance and operational summary</p>
         </div>
 
-        <select
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          className="filter-select"
-        >
-          <option>This Month</option>
-          <option>Last Month</option>
-          <option>This Year</option>
-        </select>
+        <button className="btn-primary" onClick={downloadReport}>
+          Download Report
+        </button>
       </div>
 
       <div className="stats-grid">
-        {reports.map((report, index) => {
-          const Icon = report.icon;
+        <div className="stat-card">
+          <h3>Total Orders</h3>
+          <h2>{report.orders.length}</h2>
+        </div>
 
-          return (
-            <div className="stat-card" key={index}>
-              <div className="stat-icon">
-                <Icon size={22} />
-              </div>
+        <div className="stat-card">
+          <h3>Completed Orders</h3>
+          <h2>{completedOrders}</h2>
+        </div>
 
-              <h2>{report.value}</h2>
-              <h3>{report.title}</h3>
-              <p>{report.description}</p>
+        <div className="stat-card">
+          <h3>Pending Orders</h3>
+          <h2>{pendingOrders}</h2>
+        </div>
 
-              <button
-                className="primary-button"
-                onClick={() => downloadReport(report.title)}
-              >
-                <Download size={16} />
-                Download
-              </button>
-            </div>
-          );
-        })}
+        <div className="stat-card">
+          <h3>Production Tasks</h3>
+          <h2>{report.production.length}</h2>
+        </div>
+
+        <div className="stat-card">
+          <h3>Completed Tasks</h3>
+          <h2>{completedTasks}</h2>
+        </div>
+
+        <div className="stat-card">
+          <h3>Total Stock</h3>
+          <h2>{totalStock}</h2>
+        </div>
+
+        <div className="stat-card">
+          <h3>Inventory Items</h3>
+          <h2>{report.inventory.length}</h2>
+        </div>
+
+        <div className="stat-card">
+          <h3>Employees</h3>
+          <h2>{report.employees.length}</h2>
+        </div>
       </div>
     </div>
   );
