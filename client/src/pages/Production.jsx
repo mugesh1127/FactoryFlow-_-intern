@@ -1,163 +1,324 @@
 
-import React, { useState } from 'react'
-import { Factory, Plus, Clock, CheckCircle, AlertTriangle, X } from 'lucide-react'
-
-const initialTasks = [
-  { id: 'PRD-001', product: 'Steel Components', order: 'ORD-1001', quantity: 500, completed: 320, status: 'In Progress', priority: 'High' },
-  { id: 'PRD-002', product: 'Metal Sheets', order: 'ORD-1002', quantity: 300, completed: 300, status: 'Completed', priority: 'Medium' },
-  { id: 'PRD-003', product: 'Industrial Bolts', order: 'ORD-1003', quantity: 1200, completed: 450, status: 'In Progress', priority: 'High' },
-  { id: 'PRD-004', product: 'Machine Parts', order: 'ORD-1004', quantity: 250, completed: 0, status: 'Pending', priority: 'Low' }
-]
+import { useEffect, useState } from "react";
+import { Plus, Pencil, Trash2, X } from "lucide-react";
+import {
+  getProduction,
+  addProduction,
+  updateProduction,
+  deleteProduction,
+  getOrders,
+  getEmployees
+} from "../services/api";
 
 function Production() {
-  const [tasks, setTasks] = useState(initialTasks)
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({
-    product: '',
-    order: '',
-    quantity: '',
-    priority: 'Medium'
-  })
+  const [tasks, setTasks] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
-  const updateStatus = (id, status) => {
-    setTasks(tasks.map(task => task.id === id ? {
-      ...task,
-      status,
-      completed: status === 'Completed' ? task.quantity : task.completed
-    } : task))
-  }
+  const emptyForm = {
+    task_name: "",
+    order_id: "",
+    assigned_to: "",
+    status: "Pending",
+    progress: 0,
+    start_date: "",
+    due_date: ""
+  };
 
-  const addTask = (e) => {
-    e.preventDefault()
-    setTasks([...tasks, {
+  const [form, setForm] = useState(emptyForm);
+
+  const loadData = async () => {
+    try {
+      const [taskResponse, orderResponse, employeeResponse] =
+        await Promise.all([
+          getProduction(),
+          getOrders(),
+          getEmployees()
+        ]);
+
+      setTasks(taskResponse.data);
+      setOrders(orderResponse.data);
+      setEmployees(employeeResponse.data);
+      setError("");
+    } catch (err) {
+      setError("Unable to load production data. Check the server connection.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleChange = (e) => {
+    setForm({
       ...form,
-      id: `PRD-${Date.now().toString().slice(-5)}`,
-      quantity: Number(form.quantity),
-      completed: 0,
-      status: 'Pending'
-    }])
-    setForm({ product: '', order: '', quantity: '', priority: 'Medium' })
-    setShowForm(false)
-  }
+      [e.target.name]: e.target.value
+    });
+  };
 
-  const completed = tasks.filter(task => task.status === 'Completed').length
-  const active = tasks.filter(task => task.status === 'In Progress').length
-  const pending = tasks.filter(task => task.status === 'Pending').length
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      const data = {
+        ...form,
+        order_id: form.order_id || null,
+        assigned_to: form.assigned_to || null,
+        progress: Number(form.progress)
+      };
+
+      if (editingId) {
+        await updateProduction(editingId, data);
+      } else {
+        await addProduction(data);
+      }
+
+      setShowForm(false);
+      setEditingId(null);
+      setForm(emptyForm);
+      await loadData();
+    } catch (err) {
+      setError(err.response?.data?.message || "Unable to save production task.");
+    }
+  };
+
+  const handleEdit = (task) => {
+    setEditingId(task.id);
+
+    setForm({
+      task_name: task.task_name,
+      order_id: task.order_id || "",
+      assigned_to: task.assigned_to || "",
+      status: task.status,
+      progress: task.progress,
+      start_date: task.start_date
+        ? task.start_date.slice(0, 10)
+        : "",
+      due_date: task.due_date
+        ? task.due_date.slice(0, 10)
+        : ""
+    });
+
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this task?")) {
+      return;
+    }
+
+    try {
+      await deleteProduction(id);
+      await loadData();
+    } catch (err) {
+      setError("Unable to delete production task.");
+    }
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(emptyForm);
+  };
 
   return (
-    <div>
-      <div className="page-heading">
+    <div className="page-container">
+      <div className="page-header">
         <div>
-          <p className="eyebrow">OPERATIONS</p>
           <h1>Production</h1>
-          <p className="page-subtitle">Monitor manufacturing tasks and production progress.</p>
+          <p>Track factory production tasks and progress.</p>
         </div>
-        <button className="primary-button" onClick={() => setShowForm(true)}>
-          <Plus size={17} /> Add Task
+
+        <button
+          className="primary-button"
+          onClick={() => {
+            setEditingId(null);
+            setForm(emptyForm);
+            setShowForm(true);
+          }}
+        >
+          <Plus size={18} />
+          Add Task
         </button>
       </div>
 
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon blue"><Factory size={22} /></div>
-          <p>Total Tasks</p>
-          <div className="stat-bottom"><h2>{tasks.length}</h2></div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon green"><CheckCircle size={22} /></div>
-          <p>Completed</p>
-          <div className="stat-bottom"><h2>{completed}</h2></div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon orange"><Clock size={22} /></div>
-          <p>In Progress</p>
-          <div className="stat-bottom"><h2>{active}</h2></div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon purple"><AlertTriangle size={22} /></div>
-          <p>Pending</p>
-          <div className="stat-bottom"><h2>{pending}</h2></div>
-        </div>
-      </div>
+      {error && <p className="error-message">{error}</p>}
 
-      <div className="panel">
-        <div className="panel-header">
-          <div>
-            <h3>Production Tasks</h3>
-            <p>Track current manufacturing activities</p>
+      {loading ? (
+        <p>Loading production tasks...</p>
+      ) : (
+        <div className="content-card">
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Order</th>
+                  <th>Assigned To</th>
+                  <th>Status</th>
+                  <th>Progress</th>
+                  <th>Due Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {tasks.length === 0 ? (
+                  <tr>
+                    <td colSpan="7">No production tasks found.</td>
+                  </tr>
+                ) : (
+                  tasks.map((task) => (
+                    <tr key={task.id}>
+                      <td>{task.task_name}</td>
+                      <td>{task.order_number || "-"}</td>
+                      <td>{task.employee_name || "-"}</td>
+                      <td>
+                        <span className="status">{task.status}</span>
+                      </td>
+                      <td>
+                        <div className="progress-track">
+                          <div
+                            className="progress-fill"
+                            style={{
+                              width: `${task.progress}%`
+                            }}
+                          />
+                        </div>
+                        {task.progress}%
+                      </td>
+                      <td>
+                        {task.due_date
+                          ? task.due_date.slice(0, 10)
+                          : "-"}
+                      </td>
+                      <td>
+                        <div className="action-buttons">
+                          <button
+                            className="secondary-button"
+                            onClick={() => handleEdit(task)}
+                            title="Edit task"
+                          >
+                            <Pencil size={15} />
+                          </button>
+
+                          <button
+                            className="danger-button"
+                            onClick={() => handleDelete(task.id)}
+                            title="Delete task"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Task ID</th>
-                <th>Product</th>
-                <th>Order ID</th>
-                <th>Progress</th>
-                <th>Priority</th>
-                <th>Status</th>
-                <th>Update</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.map(task => (
-                <tr key={task.id}>
-                  <td className="order-id">{task.id}</td>
-                  <td>{task.product}</td>
-                  <td>{task.order}</td>
-                  <td>
-                    <strong>{task.completed}/{task.quantity}</strong>
-                    <div className="progress-track">
-                      <div className="progress-fill" style={{ width: `${Math.min(100, task.completed / task.quantity * 100)}%` }}></div>
-                    </div>
-                  </td>
-                  <td>{task.priority}</td>
-                  <td>
-                    <span className={`status-badge ${task.status.toLowerCase().replace(' ', '-')}`}>
-                      {task.status}
-                    </span>
-                  </td>
-                  <td>
-                    <select value={task.status} onChange={e => updateStatus(task.id, e.target.value)}>
-                      <option>Pending</option>
-                      <option>In Progress</option>
-                      <option>Completed</option>
-                    </select>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
 
       {showForm && (
         <div className="modal-overlay">
-          <form className="modal-form" onSubmit={addTask}>
+          <form className="modal-form" onSubmit={handleSubmit}>
             <div className="modal-header">
-              <h2>New Production Task</h2>
-              <button type="button" onClick={() => setShowForm(false)}><X size={20} /></button>
+              <h2>{editingId ? "Edit Task" : "Add Production Task"}</h2>
+
+              <button type="button" onClick={closeForm}>
+                <X size={20} />
+              </button>
             </div>
-            <label>Product Name</label>
-            <input required value={form.product} onChange={e => setForm({ ...form, product: e.target.value })} />
-            <label>Order ID</label>
-            <input required value={form.order} onChange={e => setForm({ ...form, order: e.target.value })} />
-            <label>Quantity</label>
-            <input required type="number" min="1" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} />
-            <label>Priority</label>
-            <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}>
-              <option>Low</option>
-              <option>Medium</option>
-              <option>High</option>
+
+            <label>Task Name</label>
+            <input
+              name="task_name"
+              value={form.task_name}
+              onChange={handleChange}
+              required
+            />
+
+            <label>Related Order</label>
+            <select
+              name="order_id"
+              value={form.order_id}
+              onChange={handleChange}
+            >
+              <option value="">No order selected</option>
+              {orders.map((order) => (
+                <option key={order.id} value={order.id}>
+                  {order.order_number}
+                </option>
+              ))}
             </select>
-            <button className="primary-button submit-button" type="submit">Create Task</button>
+
+            <label>Assign Employee</label>
+            <select
+              name="assigned_to"
+              value={form.assigned_to}
+              onChange={handleChange}
+            >
+              <option value="">Unassigned</option>
+              {employees.map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.name}
+                </option>
+              ))}
+            </select>
+
+            <label>Status</label>
+            <select
+              name="status"
+              value={form.status}
+              onChange={handleChange}
+            >
+              <option>Pending</option>
+              <option>In Progress</option>
+              <option>Completed</option>
+            </select>
+
+            <label>Progress (%)</label>
+            <input
+              type="number"
+              name="progress"
+              min="0"
+              max="100"
+              value={form.progress}
+              onChange={handleChange}
+              required
+            />
+
+            <label>Start Date</label>
+            <input
+              type="date"
+              name="start_date"
+              value={form.start_date}
+              onChange={handleChange}
+            />
+
+            <label>Due Date</label>
+            <input
+              type="date"
+              name="due_date"
+              value={form.due_date}
+              onChange={handleChange}
+            />
+
+            <button type="submit" className="primary-button">
+              {editingId ? "Update Task" : "Save Task"}
+            </button>
           </form>
         </div>
       )}
     </div>
-  )
+  );
 }
 
-export default Production
+export default Production;
