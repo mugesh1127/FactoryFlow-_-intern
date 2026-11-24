@@ -1,4 +1,7 @@
 
+
+import "./StatCard.css";
+
 function StatCard({ title, value, icon, description }) {
   return (
     <div className="stat-card">
@@ -9,9 +12,7 @@ function StatCard({ title, value, icon, description }) {
 
       <h2>{value ?? 0}</h2>
 
-      {description && (
-        <p>{description}</p>
-      )}
+      {description && <p>{description}</p>}
     </div>
   );
 }
