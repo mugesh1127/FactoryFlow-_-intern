@@ -1,4 +1,7 @@
 
+
+import "./EmptyState.css";
+
 function EmptyState({
   title = "No Data Found",
   message = "There are no records available at the moment."
