@@ -1,195 +1,265 @@
 
-import React, { useState } from 'react'
-import { Package, Plus, Search, Pencil, Trash2, X, AlertTriangle } from 'lucide-react'
-
-const initialItems = [
-  { id: 'INV-001', name: 'Steel Rods', category: 'Raw Materials', quantity: 450, unit: 'kg', minimum: 100 },
-  { id: 'INV-002', name: 'Aluminium Sheets', category: 'Raw Materials', quantity: 85, unit: 'kg', minimum: 100 },
-  { id: 'INV-003', name: 'Industrial Bolts', category: 'Components', quantity: 1200, unit: 'pcs', minimum: 300 },
-  { id: 'INV-004', name: 'Machine Parts', category: 'Finished Goods', quantity: 250, unit: 'pcs', minimum: 50 },
-  { id: 'INV-005', name: 'Copper Wire', category: 'Raw Materials', quantity: 40, unit: 'kg', minimum: 75 }
-]
+import { useEffect, useState } from "react";
+import { Plus, Pencil, Trash2, X } from "lucide-react";
+import {
+  getInventory,
+  addInventory,
+  updateInventory,
+  deleteInventory
+} from "../services/api";
 
 function Inventory() {
-  const [items, setItems] = useState(initialItems)
-  const [search, setSearch] = useState('')
-  const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState(null)
-  const [form, setForm] = useState({
-    name: '',
-    category: 'Raw Materials',
-    quantity: '',
-    unit: 'pcs',
-    minimum: ''
-  })
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
-  const filteredItems = items.filter(item =>
-    [item.id, item.name, item.category].join(' ').toLowerCase().includes(search.toLowerCase())
-  )
+  const emptyForm = {
+    item_name: "",
+    category: "",
+    quantity: "",
+    unit: "",
+    minimum_stock: 10
+  };
 
-  const openForm = (item = null) => {
-    setEditingId(item?.id || null)
-    setForm(item ? {
-      name: item.name,
-      category: item.category,
-      quantity: item.quantity,
-      unit: item.unit,
-      minimum: item.minimum
-    } : {
-      name: '',
-      category: 'Raw Materials',
-      quantity: '',
-      unit: 'pcs',
-      minimum: ''
-    })
-    setShowForm(true)
-  }
+  const [form, setForm] = useState(emptyForm);
 
-  const saveItem = (e) => {
-    e.preventDefault()
-    const newItem = {
+  const loadInventory = async () => {
+    try {
+      const response = await getInventory();
+      setItems(response.data);
+      setError("");
+    } catch (err) {
+      setError("Unable to load inventory. Check the server connection.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadInventory();
+  }, []);
+
+  const handleChange = (e) => {
+    setForm({
       ...form,
-      quantity: Number(form.quantity),
-      minimum: Number(form.minimum)
+      [e.target.name]: e.target.value
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      const data = {
+        ...form,
+        quantity: Number(form.quantity),
+        minimum_stock: Number(form.minimum_stock)
+      };
+
+      if (editingId) {
+        await updateInventory(editingId, data);
+      } else {
+        await addInventory(data);
+      }
+
+      setShowForm(false);
+      setEditingId(null);
+      setForm(emptyForm);
+      await loadInventory();
+    } catch (err) {
+      setError(err.response?.data?.message || "Unable to save inventory item.");
+    }
+  };
+
+  const handleEdit = (item) => {
+    setEditingId(item.id);
+
+    setForm({
+      item_name: item.item_name,
+      category: item.category || "",
+      quantity: item.quantity,
+      unit: item.unit || "",
+      minimum_stock: item.minimum_stock
+    });
+
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this item?")) {
+      return;
     }
 
-    if (editingId) {
-      setItems(items.map(item => item.id === editingId ? { ...item, ...newItem } : item))
-    } else {
-      setItems([...items, {
-        ...newItem,
-        id: `INV-${Date.now().toString().slice(-5)}`
-      }])
+    try {
+      await deleteInventory(id);
+      await loadInventory();
+    } catch (err) {
+      setError("Unable to delete inventory item.");
     }
+  };
 
-    setShowForm(false)
-  }
-
-  const deleteItem = (id) => {
-    if (window.confirm('Delete this inventory item?')) {
-      setItems(items.filter(item => item.id !== id))
-    }
-  }
-
-  const lowStock = items.filter(item => item.quantity <= item.minimum).length
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(emptyForm);
+  };
 
   return (
-    <div>
-      <div className="page-heading">
+    <div className="page-container">
+      <div className="page-header">
         <div>
-          <p className="eyebrow">RESOURCES</p>
           <h1>Inventory</h1>
-          <p className="page-subtitle">Manage raw materials, components and finished goods.</p>
+          <p>Monitor factory materials and stock levels.</p>
         </div>
-        <button className="primary-button" onClick={() => openForm()}>
-          <Plus size={17} /> Add Item
+
+        <button
+          className="primary-button"
+          onClick={() => {
+            setEditingId(null);
+            setForm(emptyForm);
+            setShowForm(true);
+          }}
+        >
+          <Plus size={18} />
+          Add Item
         </button>
       </div>
 
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon blue"><Package size={22} /></div>
-          <p>Total Items</p>
-          <div className="stat-bottom"><h2>{items.length}</h2></div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon orange"><AlertTriangle size={22} /></div>
-          <p>Low Stock Items</p>
-          <div className="stat-bottom"><h2>{lowStock}</h2></div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon green"><Package size={22} /></div>
-          <p>Total Units</p>
-          <div className="stat-bottom"><h2>{items.reduce((sum, item) => sum + item.quantity, 0).toLocaleString()}</h2></div>
-        </div>
-      </div>
+      {error && <p className="error-message">{error}</p>}
 
-      <div className="panel">
-        <div className="panel-header">
-          <div>
-            <h3>Inventory Items</h3>
-            <p>View and update stock levels</p>
-          </div>
-          <div className="search-box">
-            <Search size={17} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search inventory..." />
-          </div>
-        </div>
-
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Item ID</th>
-                <th>Item Name</th>
-                <th>Category</th>
-                <th>Quantity</th>
-                <th>Minimum Stock</th>
-                <th>Stock Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map(item => (
-                <tr key={item.id}>
-                  <td className="order-id">{item.id}</td>
-                  <td>{item.name}</td>
-                  <td>{item.category}</td>
-                  <td>{item.quantity} {item.unit}</td>
-                  <td>{item.minimum} {item.unit}</td>
-                  <td>
-                    <span className={`status-badge ${item.quantity <= item.minimum ? 'pending' : 'completed'}`}>
-                      {item.quantity <= item.minimum ? 'Low Stock' : 'Available'}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="action-buttons">
-                      <button title="Edit item" onClick={() => openForm(item)}><Pencil size={16} /></button>
-                      <button title="Delete item" onClick={() => deleteItem(item.id)}><Trash2 size={16} /></button>
-                    </div>
-                  </td>
+      {loading ? (
+        <p>Loading inventory...</p>
+      ) : (
+        <div className="content-card">
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item Name</th>
+                  <th>Category</th>
+                  <th>Quantity</th>
+                  <th>Unit</th>
+                  <th>Minimum Stock</th>
+                  <th>Stock Status</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-              {filteredItems.length === 0 && (
-                <tr><td colSpan="7" style={{ textAlign: 'center' }}>No inventory items found.</td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+
+              <tbody>
+                {items.length === 0 ? (
+                  <tr>
+                    <td colSpan="7">No inventory items found.</td>
+                  </tr>
+                ) : (
+                  items.map((item) => {
+                    const lowStock =
+                      Number(item.quantity) <= Number(item.minimum_stock);
+
+                    return (
+                      <tr key={item.id}>
+                        <td>{item.item_name}</td>
+                        <td>{item.category || "-"}</td>
+                        <td>{item.quantity}</td>
+                        <td>{item.unit || "-"}</td>
+                        <td>{item.minimum_stock}</td>
+                        <td>
+                          <span className={lowStock ? "stock-low" : "status"}>
+                            {lowStock ? "Low Stock" : "Available"}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            <button
+                              className="secondary-button"
+                              onClick={() => handleEdit(item)}
+                              title="Edit item"
+                            >
+                              <Pencil size={15} />
+                            </button>
+
+                            <button
+                              className="danger-button"
+                              onClick={() => handleDelete(item.id)}
+                              title="Delete item"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {showForm && (
         <div className="modal-overlay">
-          <form className="modal-form" onSubmit={saveItem}>
+          <form className="modal-form" onSubmit={handleSubmit}>
             <div className="modal-header">
-              <h2>{editingId ? 'Edit Inventory Item' : 'Add Inventory Item'}</h2>
-              <button type="button" onClick={() => setShowForm(false)}><X size={20} /></button>
+              <h2>{editingId ? "Edit Inventory" : "Add Inventory Item"}</h2>
+
+              <button type="button" onClick={closeForm}>
+                <X size={20} />
+              </button>
             </div>
+
             <label>Item Name</label>
-            <input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+            <input
+              name="item_name"
+              value={form.item_name}
+              onChange={handleChange}
+              required
+            />
+
             <label>Category</label>
-            <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-              <option>Raw Materials</option>
-              <option>Components</option>
-              <option>Finished Goods</option>
-            </select>
+            <input
+              name="category"
+              value={form.category}
+              onChange={handleChange}
+            />
+
             <label>Quantity</label>
-            <input required type="number" min="0" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} />
+            <input
+              type="number"
+              name="quantity"
+              min="0"
+              value={form.quantity}
+              onChange={handleChange}
+              required
+            />
+
             <label>Unit</label>
-            <select value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })}>
-              <option>pcs</option>
-              <option>kg</option>
-              <option>litres</option>
-              <option>boxes</option>
-            </select>
-            <label>Minimum Stock Level</label>
-            <input required type="number" min="0" value={form.minimum} onChange={e => setForm({ ...form, minimum: e.target.value })} />
-            <button className="primary-button submit-button" type="submit">Save Item</button>
+            <input
+              name="unit"
+              value={form.unit}
+              onChange={handleChange}
+              placeholder="e.g. kg, pieces, litres"
+            />
+
+            <label>Minimum Stock</label>
+            <input
+              type="number"
+              name="minimum_stock"
+              min="0"
+              value={form.minimum_stock}
+              onChange={handleChange}
+              required
+            />
+
+            <button type="submit" className="primary-button">
+              {editingId ? "Update Item" : "Save Item"}
+            </button>
           </form>
         </div>
       )}
     </div>
-  )
+  );
 }
 
-export default Inventory
+export default Inventory;
