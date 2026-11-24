@@ -1,0 +1,31 @@
+
+{
+  "name": "factoryflow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FactoryFlow - Order-to-Workflow Management System",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix client\" \"nodemon server/index.js\"",
+    "build": "npm run build --workspace=client",
+    "start": "node server/index.js"
+  },
+  "workspaces": [
+    "client"
+  ],
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "nodemon": "^3.1.9"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
