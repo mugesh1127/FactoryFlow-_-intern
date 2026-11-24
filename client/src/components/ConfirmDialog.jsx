@@ -1,4 +1,6 @@
 
+import "./ConfirmDialog.css";
+
 function ConfirmDialog({
   message = "Are you sure you want to continue?",
   onConfirm,
